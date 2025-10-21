@@ -7,14 +7,14 @@
 // Modifica los siguientes rubros con los valores adecuados
 // para establecer la comunicación con el servidor MQTT.
 // **********************************************
-const char* SSID     = "SSID";     // Se define el nombre de la red a la cual se conectará el módulo ESP32
-const char* PASSWORD = "PASSWORD"; // Se define la contraseña de la red
+const char* SSID     = "MG50";     // Se define el nombre de la red a la cual se conectará el módulo ESP32
+const char* PASSWORD = "MG50@EIOu"; // Se define la contraseña de la red
 
 const char* MQTT_SERVER    = "192.168.195.153"; // Es la dirección IP del equipo donde corre el servidor MQTT.
 const char* CLIENT_ID      = "ESP32-A";         // Es un identificador único del cliente conectado.
-const int MQTT_BROKER_PORT = 1883;              // Es el puerto de comunicación (puerto de red) asignado al servidor MQTT. 
+const int MQTT_SERVER_PORT = 1883;              // Es el puerto de comunicación (puerto de red) asignado al servidor MQTT. 
 
-const char* topics[2] = {"switch0", "switch1"}; // Es el nombre del tópico al cual se publicarán los mensajes.
+const char* topic = "switch0"; // Es el nombre del tópico al cual se publicarán los mensajes.
 
 // **********************************************
 
@@ -34,16 +34,16 @@ void setup()
 void loop() 
 {
   // Si el cliente MQTT pierde la conexión con el servidor, se intenta reconectar.
-  if (!client.connected()) 
+  if (!mqttClient.connected()) 
   {
     reconnect(); // Función usada para reconectar el cliente MQTT.
   }
   
   // La función loop() se llama con regularidad para permitir la llegada de mensajes y mantener la conexión con el servidor MQTT.
   // Si se ha perdido la conexión con el servidor, se intenta establecer nuevamente la misma.
-  if(!client.loop())
+  if(!mqttClient.loop())
   {
-    client.connect(CLIENT_ID);
+    mqttClient.connect(CLIENT_ID);
   }
 
   // **********************************************
@@ -59,7 +59,7 @@ void loop()
   char payload[10];
   sprintf(payload, "%.2f", msg);
   
-  client.publish(topic, payload);
+  mqttClient.publish(topic, payload);
   
   Serial.print("Payload: ");
   Serial.print(payload);
@@ -101,17 +101,17 @@ void setup_wifi()
 // 3. Si la conexión falla, se vuelte a intentar la reconexión pasados 5 segundos.
 void reconnect()
 {
-  while (!client.connected())
+  while (!mqttClient.connected())
   {
     Serial.print("Attempting MQTT connection...");
-    if (client.connect(CLIENT_ID))
+    if (mqttClient.connect(CLIENT_ID))
     {
       Serial.println("connected");
     }
     else
     {
       Serial.print("MQTT connection failed, rc=");
-      Serial.print(client.state());
+      Serial.print(mqttClient.state());
       Serial.println(" try again in 5 seconds");
       delay(5000);
     }
