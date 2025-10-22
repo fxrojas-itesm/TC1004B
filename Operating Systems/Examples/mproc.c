@@ -27,9 +27,9 @@ int main(int argc, char* argv[])
     N = atoi(argv[1]);
   }
 
-  A = mmap(NULL, N*N*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  B = mmap(NULL, N*N*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  C = mmap(NULL, N*N*sizeof(float), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  A = mmap(NULL, N*N*sizeof(uint32_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  B = mmap(NULL, N*N*sizeof(uint32_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  C = mmap(NULL, N*N*sizeof(uint32_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
   for (i = 0; i < N*N; i++)
   {
