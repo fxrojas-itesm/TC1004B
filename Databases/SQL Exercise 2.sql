@@ -1,0 +1,84 @@
+USE master;
+GO
+
+DROP DATABASE IF EXISTS Books;
+GO
+
+CREATE DATABASE Books;
+GO
+
+USE Books;
+GO
+
+CREATE TABLE Home (
+	ID			INT			IDENTITY(1,1) PRIMARY KEY,
+	Author		VARCHAR(50)	DEFAULT 'Author',
+	Title		VARCHAR(75) DEFAULT 'Title',
+	Publisher	VARCHAR(25)	DEFAULT 'Publisher',
+	Year		INTEGER		DEFAULT 1900,
+	Edition		INTEGER		DEFAULT 1,
+	ISBN		CHAR(13)	DEFAULT 9780000000000);
+GO
+
+INSERT INTO Home 
+(Author, Title, Publisher, Year, Edition, ISBN)
+VALUES('Rick Silva', 'MySQL Crash Course', 'No Starch Press', 2023, 1, '9781718503007'),
+('Itzik Ben-Gan', 'T-SQL Fundamentals', 'Microsoft Press', 2023, 4, '9780138102104'),
+('Donald A. Neamen', 'Microelectronics Circuit Analysis and Design', 'McGraw Hill', 2009, 4, '9780073380643'),
+('Charles K. Alexander', 'Fundamentals of Electric Circuits', 'McGraw-Hill', 2008, 4, '9780077263195'),
+('Sarah L. Harris',	'Digital Design and Computer Architecture: Risc-V Edition',	'Morgan Kaufmann', 2021, 1, '9780128200643'),
+('Jeroen Janssens',	'Python Polars: The Definitive Guide', 'OReilly Media', 2025, 1, '9781098156084'),
+('Ayodeji Ayodele',	'GitHub Foundations Certifications Guide',	'Packt Publishing',	2025, 1, '9781836206057'),
+('Thomas L. Floyd',	'Digital Fundamentals',	'Pearson', 2008, 10, '9780132359238'),
+('Aurelio Baldor',	'Aritmética', 'Patria', 2020, 4, '9786075502076'),
+('Sam Lau',	'Learning Data Science', 'OReilly Media', 2023, 1, '9781098113001');
+GO
+
+CREATE TABLE Library (
+	ID				INT			IDENTITY(1,1) PRIMARY KEY,
+	ISBN			CHAR(13)	DEFAULT '9780000000000',
+	Classification	VARCHAR(30) DEFAULT 'Classification',
+	Campus			CHAR(3)		DEFAULT 'CMP');
+GO
+
+INSERT INTO Library 
+(ISBN, Classification, Campus)
+VALUES('9780073380643', 'TK7867.N432 2010', 'AGS'),
+('9780073380643', 'TK7867.N425 2012 c.2', 'CCM'),
+('9780073380643', 'TK7867.N432 2010', 'CCM'),
+('9780132359238', 'TK7868.D5.F56 2009', 'CCM'),
+('9780132359238', 'TK7868.D5.F56 2009 c.3', 'CCM'),
+('9780132359238', 'TK7868.D5.F56 2009 c.4', 'CCM'),
+('9780132359238', 'TK7868.D5.F532 2009', 'CHI'),
+('9780132359238', 'TK7868.D5.F532 2009 c.2', 'CHI'),
+('9780132359238', 'TK7868.D5.F56 2008', 'CSF'),
+('9780132359238', 'TK7868.D5.F56 2009', 'GDA'),
+('9780132359238', 'TK7868.D5.F532 2009', 'HER'),
+('9780132359238', 'TK7868.D5.F532 2009 c.2', 'HER'),
+('9780132359238', 'TK7868.D5.F5 2009', 'HGO'),
+('9780132359238', 'TK7868.D5.F532 2009', 'PUE'),
+('9780132359238', 'TK7868.D5.F532 2009 c.2', 'PUE'),
+('9780132359238', 'TK7868.D5.F532 2009', 'SAL'),
+('9780132359238', 'TK7868.D5.F532 2009', 'SIN');
+GO
+
+CREATE TABLE Store(
+	ID		INT			IDENTITY(1,1) PRIMARY KEY,
+	ISBN	CHAR(13)	DEFAULT '9780000000000',
+	ASIN    CHAR(10)    DEFAULT '0000000000',
+    Price	REAL		DEFAULT 0.0);
+GO
+
+INSERT INTO Store 
+(ISBN, ASIN, Price)
+VALUES('9781718503007', '1718503008', 642.02),
+('9780138102104', '0138102104', 782.57),
+('9780073380643', '0073380644', 5270.89),
+('9780077263195', '0077263197', 1411.96),
+('9780128200643', '0128200642', 1885.95),
+('9781098156084', '1098156080', 1508.39),
+('9781836206057', '1836206054', 723.53),
+('9780132359238', '0132359235', 1088.51),
+('9786075502076', '6075502076', 375.2),
+('9781098113001', '1098113004', 1481.48);
+GO
