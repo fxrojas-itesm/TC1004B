@@ -25,7 +25,7 @@ INSERT INTO Home
 VALUES('Rick Silva', 'MySQL Crash Course', 'No Starch Press', 2023, 1, '9781718503007'),
 ('Itzik Ben-Gan', 'T-SQL Fundamentals', 'Microsoft Press', 2023, 4, '9780138102104'),
 ('Donald A. Neamen', 'Microelectronics Circuit Analysis and Design', 'McGraw Hill', 2009, 4, '9780073380643'),
-('Charles K. Alexander', 'Fundamentals of Electric Circuits', 'McGraw-Hill', 2008, 4, '9780077263195'),
+('Charles K. Alexander', 'Fundamentals of Electric Circuits', 'McGraw ßHill', 2008, 4, '9780077263195'),
 ('Sarah L. Harris',	'Digital Design and Computer Architecture: Risc-V Edition',	'Morgan Kaufmann', 2021, 1, '9780128200643'),
 ('Jeroen Janssens',	'Python Polars: The Definitive Guide', 'OReilly Media', 2025, 1, '9781098156084'),
 ('Ayodeji Ayodele',	'GitHub Foundations Certifications Guide',	'Packt Publishing',	2025, 1, '9781836206057'),
