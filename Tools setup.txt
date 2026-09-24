@@ -1,0 +1,48 @@
+# Winget setup
+$progressPreference = 'silentlyContinue'
+Write-Host "Installing WinGet PowerShell module from PSGallery..."
+Install-PackageProvider -Name NuGet -Force | Out-Null
+Install-Module -Name Microsoft.WinGet.Client -Force -Repository PSGallery | Out-Null
+Write-Host "Using Repair-WinGetPackageManager cmdlet to bootstrap WinGet..."
+Repair-WinGetPackageManager -AllUsers
+Write-Host "Done."
+
+# VScode setup
+winget install Microsoft.VisualStudioCode --scope machine --override "/SILENT /DIR=""C:\Tools\VSCode"""
+# Remove all Telemetry 
+
+# On PowerShell terminal with Admin privileges
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+# Restart
+wsl --install -d Debian
+
+# On Debian terminal
+#sudo sed -i 's|https|http|g' /etc/apt/sources.list.d/0000debian.sources
+sudo apt update && sudo apt -y install info wget file build-essential
+
+# Docker setup
+sudo apt update && sudo apt -y install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# For Ubuntu #
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# For Ubuntu #
+
+# For Debian #
+sudo apt -y modernize-sources
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# For Debian #
+
+sudo apt update && sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+echo "1" | sudo update-alternatives --config iptables
+sudo usermod -aG docker $USER
+sudo sed -i 's|nameserver 10.255.255.254|# nameserver 10.255.255.254|g' /etc/resolv.conf
+echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf > /dev/null
+sudo tee -a /etc/wsl.conf << '__EOF__'
+[network]
+generateResolvConf = false
+__EOF__
+docker run hello-world
