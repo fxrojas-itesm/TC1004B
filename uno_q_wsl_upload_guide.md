@@ -545,7 +545,17 @@ The new board will boot up immediately into your fully configured Debian environ
 
 ## Part 5: Compilation
 
-### 1. Create the Sketch File
+### 1. Creating Workspace Folder
+
+First, create the `/workspace/arduino-uno-q/` directory with global read/write permissions (matching `/opt/arduino-uno-q-tools/`) and navigate into it:
+
+```bash
+sudo mkdir -p /workspace/arduino-uno-q
+sudo chmod -R a+w /workspace/arduino-uno-q
+cd /workspace/arduino-uno-q
+```
+
+### 2. Create the Sketch File
 
 Arduino sketches require the main `.ino` file to be inside a folder of the exact same name. Let's create a `led` folder and place your `led.ino` code inside it using the terminal:
 
@@ -567,7 +577,7 @@ void loop() {
 __EOF__
 ```
 
-### 2. Understanding Link Modes
+### 3. Understanding Link Modes
 
 When you compile a sketch for the UNO Q, `arduino-cli` does not produce a standalone firmware. The microcontroller always runs a pre-built **Zephyr loader** (the "bootloader" firmware shipped with the core). Your sketch is built as an add-on that this loader starts. *How* the sketch is joined to the loader is controlled by the board's **Link mode** option.
 
@@ -589,7 +599,7 @@ When you compile a sketch for the UNO Q, `arduino-cli` does not produce a standa
 > [!TIP]
 > **Which should I use?** Stay with **Dynamic** unless you have a specific reason not to (such as needing hardware breakpoint debugging with GDB). Its main weakness (a larger payload) rarely matters, and it keeps working when the loader on the board and your installed core drift slightly apart.
 
-### 3. Compile the Sketch
+### 4. Compile the Sketch
 
 From the directory containing your new `led` folder, compile the sketch choosing one of the two link modes:
 
@@ -620,10 +630,7 @@ arduino-cli compile -b arduino:zephyr:unoq:link_mode=static --output-dir ./led/b
 
 ## Part 6: The Manual Upload (Direct OpenOCD Flashing via SSH)
 
-Instead of `arduino-cli upload`, we copy only the sketch payload to the board over SSH (`scp`) and flash it using the board's internal OpenOCD. The Zephyr loader already on the microcontroller is left untouched.
-
-> [!NOTE]
-> This method assumes the Zephyr loader on the board is already present and compatible with your installed core version. The official tool re-flashes the loader when it differs; this manual method never does. If you update the `arduino:zephyr` core and sketches stop running, perform one official upload (or burn the bootloader) to refresh the loader.
+Instead of `arduino-cli upload`, we copy the sketch payload to the board over SSH (`scp`) and flash it using the board's internal OpenOCD.
 
 **Set the Board Address Variable:**
 Set `BOARD_HOST` to your board's Ethernet-over-USB IP (`192.168.7.1`) or mDNS hostname (`uno-q.local`):
@@ -637,6 +644,16 @@ Use `ssh` to create a temporary folder on the board's Linux side:
 ssh ${BOARD_HOST} "mkdir -p /tmp/remoteocd"
 ```
 
+> [!IMPORTANT]
+> **One-Time Step (New Board or After Updating `arduino:zephyr` Core):**
+> Flashing the Debian Linux OS with `arduino-flasher-cli` only programs the Qualcomm eMMC—it does **not** update the STM32 microcontroller's internal flash (`0x08000000`). When `arduino-cli core install/upgrade arduino:zephyr` installs a newer core release (such as `arduino:zephyr 1.1.0`, whose loader is `265,460` bytes vs. the factory `263,680`-byte loader), sketches compiled with the new core import updated LLEXT symbols (`pinctrl_configure_pins`, `__real_*` wrappers, and updated device ordinals) that the older factory loader does not export—causing the sketch to fail to load until the STM32's Zephyr loader is updated once:
+> ```bash
+> LOADER_BIN=$(ls /opt/arduino-uno-q-tools/data/packages/arduino/hardware/zephyr/*/firmwares/zephyr-arduino_uno_q_stm32u585xx.bin | sort -V | tail -n 1)
+> scp "${LOADER_BIN}" ${BOARD_HOST}:/tmp/remoteocd/loader.bin
+> ssh ${BOARD_HOST} "/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/loader.bin 0x08000000 bin' -c 'reset halt' -c 'resume' -c 'mww 0xE000EDF0 0xA05F0000' -c 'shutdown'"
+> ```
+> Once the STM32 has the matching Zephyr loader at `0x08000000`, all subsequent uploads only need Steps 2 and 3 below.
+
 **2. Copy the Sketch Payload via `scp`**
 Copy only your compiled sketch payload to the board:
 ```bash
@@ -648,12 +665,12 @@ scp ./led/build/led.ino.elf-zsk.bin ${BOARD_HOST}:/tmp/remoteocd/sketch.bin
 ```
 
 > [!NOTE]
-> **How big is the payload?** There is no 100 KB limit. For reference, the LED blink sketch above produces a **~74 KB** `.elf-zsk.bin`. Sketches that pull in libraries (e.g., `Arduino_RouterBridge`) will be larger. The real limits, defined by the core's `boards.txt`, are **768 KB (786,432 bytes) of flash** and **256 KB (262,144 bytes) of RAM** — `arduino-cli compile` prints your usage against these after every build. You can check the payload size with `ls -l ./led/build/*.elf-zsk.bin`.
+> **How big is the payload?** There is no 100 KB limit. For reference, the LED blink sketch above produces a **~76 KB** `.elf-zsk.bin`. Sketches that pull in libraries (e.g., `Arduino_RouterBridge`) will be larger. The real limits, defined by the core's `boards.txt`, are **768 KB (786,432 bytes) of flash** and **256 KB (262,144 bytes) of RAM** — `arduino-cli compile` prints your usage against these after every build. You can check the payload size with `ls -l ./led/build/*.elf-zsk.bin`.
 
 **3. Flash the Microcontroller via `ssh`**
 Run the board's internal OpenOCD over `ssh` to flash the STM32 microcontroller directly:
 ```bash
-ssh ${BOARD_HOST} "/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'shutdown'"
+ssh ${BOARD_HOST} "/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset halt' -c 'resume' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'mww 0xE000EDF0 0xA05F0000' -c 'shutdown'"
 ```
 
 ### Understanding the Flash Command
@@ -666,13 +683,11 @@ Because the Arduino UNO Q has two processors (a Linux processor and an STM32 mic
 *   **`-c 'init'`**: Initializes OpenOCD, connects to the STM32 via SWD, and prepares it for commands.
 *   **`-c 'reset halt'`**: Resets the STM32 and immediately halts its CPU so the flash can be written from a known, stable state.
 *   **`-c 'flash write_image erase ... 0x8100000 bin'`**: Erases the required sectors and writes the sketch payload starting at `0x08100000` — the start of the STM32U585's second flash bank, which is the core's configured sketch address (`unoq.upload.address`). The Zephyr loader lives below this address and is not touched.
-*   **`-c 'reset'`**: Resets the STM32 so it starts from the updated flash.
-*   **`-c 'sleep 100'`**: Pauses for 100 milliseconds to let the reset cycle progress.
-*   **`-c 'mww 0x40036400 0xCAFFEEEE'`**: "Memory Write Word" — writes the value `0xCAFFEEEE` to address `0x40036400`. The official script performs this exact write after flashing a sketch.
+*   **`-c 'reset halt'` & `-c 'resume'`**: Resets the STM32 and resumes execution from the updated flash while preserving the firmware's DWT/DebugMonitor setup.
+*   **`-c 'sleep 100'`**: Pauses for 100 milliseconds so the Zephyr loader completes its initial clear of the backup SRAM mailbox (`0x40036400`).
+*   **`-c 'mww 0x40036400 0xCAFFEEEE'`**: "Memory Write Word" — writes `0xCAFFEEEE` to backup SRAM at `0x40036400` after the 100 ms delay to signal the loader that a fresh sketch upload completed.
+*   **`-c 'mww 0xE000EDF0 0xA05F0000'`**: Clears `DHCSR.C_DEBUGEN` (using the Cortex-M `DBGKEY` `0xA05F0000`) left set by OpenOCD so DWT null-pointer traps raise `DebugMonitor` rather than halting the CPU when no debugger is attached.
 *   **`-c 'shutdown'`**: Closes OpenOCD and returns control to your WSL terminal.
-
-> [!NOTE]
-> **What is confirmed vs. inferred about `0xCAFFEEEE`:** It is confirmed that the official `flash_sketch.cfg` writes this value to this address after flashing. The *explanation* that it is a "magic word" telling the Zephyr loader to start the newly flashed sketch is an inference and has not been verified against the loader source.
 
 > [!NOTE]
 > The official `flash_sketch.cfg` also sets `reset_config srst_only srst_nogate srst_push_pull connect_assert_srst` before `init`. The command above does not set it explicitly. If you ever see unreliable connects or resets, adding `-c 'reset_config srst_only srst_nogate srst_push_pull connect_assert_srst'` before `-c 'init'` matches the official behaviour more closely.
@@ -687,9 +702,12 @@ With the board accessible over standard IP (either via **Ethernet-over-USB** at 
 
 ### 1. Configure Passwordless SSH (One-Time Setup)
 
-In your WSL terminal, copy your SSH public key to the board so VSCode build/upload tasks run without password prompts:
+In your WSL terminal, generate an SSH key if you don't already have one, and copy your public key to the board so VSCode build/upload tasks run without password prompts:
 
 ```bash
+# Generate an SSH key if you do not already have one:
+[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -t ed25519
+
 # If you connect via Ethernet-over-USB:
 ssh-copy-id arduino@192.168.7.1
 
@@ -697,9 +715,23 @@ ssh-copy-id arduino@192.168.7.1
 ssh-copy-id arduino@uno-q.local
 ```
 
-### 2. Configure VSCode Tasks (`.vscode/tasks.json`)
+### 2. Open the `/workspace/arduino-uno-q` Folder in VSCode (Remote Development)
 
-Create or update `.vscode/tasks.json` in your workspace. This configuration compiles the currently open sketch in **Dynamic link mode** (`arduino:zephyr:unoq`) and uses `scp` and `ssh` to flash the `.elf-zsk.bin` payload onto the microcontroller:
+> [!IMPORTANT]
+> **Install the Remote Development Extension First:**
+> Before opening the WSL workspace in VSCode, open the **Extensions** view (`Ctrl + Shift + X`) in VSCode on Windows and install the **Remote Development** extension pack (`ms-vscode-remote.vscode-remote-extensionpack`)—or at minimum the **WSL** extension (`ms-vscode-remote.remote-wsl`).
+
+1. **Connect to WSL using the Remote Extension & Open `/workspace/arduino-uno-q`:**
+   * Click the **Open a Remote Window** button (`><`) in the bottom-left corner of VSCode (or press `Ctrl + Shift + P` and select **WSL: Connect to WSL in New Window** / **WSL: Connect to WSL using Distro...**).
+   * Once connected to your WSL instance, go to **File $\rightarrow$ Open Folder...** (`Ctrl + K, Ctrl + O`), type `/workspace/arduino-uno-q`, and click **OK**.
+   * *(Alternatively, from your WSL terminal inside `/workspace/arduino-uno-q`, simply run `code /workspace/arduino-uno-q`).*
+2. **Turn Off Restricted Mode (Trust the Workspace):**
+   * When VSCode opens the folder, click **Yes, I trust the authors** in the Workspace Trust dialog.
+   * If the folder opens in **Restricted Mode**, click the **Restricted Mode** indicator in the top banner or bottom status bar, select **Manage**, and click **Trust Folder**. *(VSCode disables `.vscode/tasks.json` execution while Restricted Mode is active).*
+
+### 3. Configure VSCode Tasks (`.vscode/tasks.json`)
+
+Create or update `.vscode/tasks.json` in your `/workspace/arduino-uno-q` workspace. This configuration compiles the currently open sketch in **Dynamic link mode** (`arduino:zephyr:unoq`) and uses `scp` and `ssh` to flash the `.elf-zsk.bin` payload onto the microcontroller:
 
 ```json
 {
@@ -722,7 +754,7 @@ Create or update `.vscode/tasks.json` in your workspace. This configuration comp
         {
             "label": "Arduino UNO Q: Upload via SSH (Dynamic)",
             "type": "shell",
-            "command": "/opt/arduino-uno-q-tools/arduino-cli compile -b arduino:zephyr:unoq --build-path \"${fileDirname}/build/tmp\" --output-dir \"${fileDirname}/build\" \"${fileDirname}\" && ssh arduino@192.168.7.1 \"mkdir -p /tmp/remoteocd\" && scp \"${fileDirname}/build/\"*.elf-zsk.bin arduino@192.168.7.1:/tmp/remoteocd/sketch.bin && ssh arduino@192.168.7.1 \"/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'shutdown'\"",
+            "command": "/opt/arduino-uno-q-tools/arduino-cli compile -b arduino:zephyr:unoq --build-path \"${fileDirname}/build/tmp\" --output-dir \"${fileDirname}/build\" \"${fileDirname}\" && ssh arduino@192.168.7.1 \"mkdir -p /tmp/remoteocd\" && scp \"${fileDirname}/build/\"*.elf-zsk.bin arduino@192.168.7.1:/tmp/remoteocd/sketch.bin && ssh arduino@192.168.7.1 \"/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset halt' -c 'resume' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'mww 0xE000EDF0 0xA05F0000' -c 'shutdown'\"",
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -738,7 +770,7 @@ Create or update `.vscode/tasks.json` in your workspace. This configuration comp
 ```
 *(Note: If using Wi-Fi instead of Ethernet-over-USB, simply change `arduino@192.168.7.1` to `arduino@uno-q.local`).*
 
-### 3. Running Build & Upload Tasks in VSCode
+### 4. Running Build & Upload Tasks in VSCode
 1. Open your `.ino` sketch file in VSCode (e.g., `led/led.ino`).
 2. **To Compile Only:** Press **`Ctrl + Shift + B`** (runs the default build task `Arduino UNO Q: Compile Current Sketch (Dynamic)`).
 3. **To Compile & Upload:** Open the Command Palette (`Ctrl + Shift + P`), select **Tasks: Run Task**, and choose **`Arduino UNO Q: Upload via SSH (Dynamic)`**.
@@ -918,7 +950,7 @@ Create or update `.vscode/tasks.json` in your workspace to compile with `:link_m
         {
             "label": "Arduino UNO Q: Upload via SSH (Static)",
             "type": "shell",
-            "command": "/opt/arduino-uno-q-tools/arduino-cli compile -b arduino:zephyr:unoq:link_mode=static --build-path \"${fileDirname}/build-static/tmp\" --output-dir \"${fileDirname}/build-static\" \"${fileDirname}\" && ssh arduino@192.168.7.1 \"mkdir -p /tmp/remoteocd\" && scp \"${fileDirname}/build-static/\"*.bin-zsk.bin arduino@192.168.7.1:/tmp/remoteocd/sketch.bin && ssh arduino@192.168.7.1 \"/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'shutdown'\"",
+            "command": "/opt/arduino-uno-q-tools/arduino-cli compile -b arduino:zephyr:unoq:link_mode=static --build-path \"${fileDirname}/build-static/tmp\" --output-dir \"${fileDirname}/build-static\" \"${fileDirname}\" && ssh arduino@192.168.7.1 \"mkdir -p /tmp/remoteocd\" && scp \"${fileDirname}/build-static/\"*.bin-zsk.bin arduino@192.168.7.1:/tmp/remoteocd/sketch.bin && ssh arduino@192.168.7.1 \"/opt/openocd/bin/openocd -d2 -s /opt/openocd -s /opt/openocd/share/openocd/scripts -f openocd_gpiod.cfg -c 'init' -c 'reset halt' -c 'flash write_image erase /tmp/remoteocd/sketch.bin 0x8100000 bin' -c 'reset halt' -c 'resume' -c 'sleep 100' -c 'mww 0x40036400 0xCAFFEEEE' -c 'mww 0xE000EDF0 0xA05F0000' -c 'shutdown'\"",
             "group": {
                 "kind": "test",
                 "isDefault": true
@@ -980,17 +1012,17 @@ Configure `.vscode/launch.json` to attach to the SSH-tunneled GDB server using `
 
 ## Appendix 5: Verified Facts For Compiled Binary
 
-Values below were read and verified against the installed `arduino:zephyr` core and real physical hardware testing on the Arduino UNO Q.
+Values below were read and verified against the installed `arduino:zephyr` (`1.1.0`) core and real physical hardware testing on the Arduino UNO Q.
 
 | Item | Value | Source |
 |---|---|---|
 | Default upload artifact | `{project}.elf-zsk.bin` | `platform.txt`: `upload.extension=elf-zsk.bin` |
 | Static-mode upload artifact | `{project}.bin-zsk.bin` | `boards.txt`: `unoq.menu.link_mode.static.upload.extension` |
-| LED sketch payload size (Dynamic) | 75,488 bytes (~74 KB) `.elf-zsk.bin` | `led/build/` listing |
-| LED sketch payload size (Static) | 24,788 bytes (~24 KB) `.bin-zsk.bin` | `led/build-static/` listing |
+| LED sketch payload size (Dynamic) | 77,820 bytes (~76 KB) `.elf-zsk.bin` | `led/build/` listing (`1.1.0`) |
+| LED sketch payload size (Static) | 24,788–29,912 bytes (~24–29 KB) `.bin-zsk.bin` | `led/build/` listing |
 | Static debug ELF type | `EXEC (Executable file)`, Entry point: `0x08100011` | `readelf -h led.ino_debug.elf` |
 | Static flash addresses | `setup()` at `0x08102590`, `loop()` at `0x0810259c` | `readelf -sW led.ino_debug.elf` |
-| On-board loader match | 263,680 bytes read back from flash; 1 byte diff at `0x0803f8bf` (data only, 0 code address shifts) | `dump_image` vs `zephyr-*.bin` |
+| On-board loader match | Factory `0.5x` loader (`263,680` bytes) vs `1.1.0` loader (`265,460` bytes) at `0x08000000` | `dump_image` vs `zephyr-*.bin` |
 | Hardware Breakpoints | **Verified working!** Breakpoints hit, call stack traced, and single-stepping confirmed via GDB | Physical board test (GDB + OpenOCD) |
 | Static link mode flags | `build.link_mode=static`, links with `syms-static.ld`, packaged with `zephyr-sketch-tool -prelinked` | `boards.txt` / `platform.txt` |
 | Dynamic link mode flags | Relocatable link (`build-dynamic.ld -r`) against `syms-dynamic.ld`, ELF type `ET_REL` | `platform.txt` / ELF header of `.elf-zsk.bin` |
@@ -999,7 +1031,7 @@ Values below were read and verified against the installed `arduino:zephyr` core 
 | Max sketch RAM | 262,144 bytes (256 KB) | `boards.txt`: `unoq.upload.maximum_data_size` |
 | Sketch flash address | `0x08100000` | `boards.txt`: `unoq.upload.address` |
 | Official upload tool | `remoteocd` (passes loader + sketch over ADB) | `boards.txt` / `platform.txt` |
-| Loader file passed to `remoteocd` | `zephyr-arduino_uno_q_stm32u585xx.elf`, 2,303,728 bytes | `firmwares/` listing |
-| Loader flashed content | `zephyr-arduino_uno_q_stm32u585xx.bin`, 263,680 bytes | `firmwares/` listing |
+| Loader file passed to `remoteocd` | `zephyr-arduino_uno_q_stm32u585xx.elf`, 2,346,964 bytes | `firmwares/` listing (`1.1.0`) |
+| Loader flashed content | `zephyr-arduino_uno_q_stm32u585xx.bin`, 265,460 bytes | `firmwares/` listing (`1.1.0`) |
 | Loader/sketch rewrite policy | Each rewritten only if `flash verify_image` fails | `flash_sketch.cfg` |
-| Post-flash sequence | `reset`, `sleep 100`, `mww 0x40036400 0xCAFFEEEE`, `shutdown` | `flash_sketch.cfg` |
+| Post-flash sequence | `reset halt`, `resume`, `sleep 100`, `mww 0x40036400 0xCAFFEEEE`, `mww 0xE000EDF0 0xA05F0000`, `shutdown` | `flash_sketch.cfg` (`1.1.0`) |
